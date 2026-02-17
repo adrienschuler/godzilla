@@ -44,6 +44,8 @@ spec:
         env:
         - name: PORT
           value: "3000"
+        - name: PRESENCE_HOST
+          value: "presence-svc:50051"
 ---
 apiVersion: v1
 kind: Service

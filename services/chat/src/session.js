@@ -14,9 +14,7 @@ import fs from 'fs';
 export function loadSession(filePath) {
   const raw = fs.readFileSync(filePath, 'utf8').trim();
   const session = JSON.parse(raw);
-  const cookie = (session.cookies || []).find(
-    (c) => c.name === 'auth_token',
-  );
+  const cookie = (session.cookies || []).find((c) => c.name === 'auth_token');
   if (!cookie) return { cookie: '', username: '' };
 
   const cookieStr = `${cookie.name}=${cookie.value}`;

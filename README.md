@@ -44,11 +44,13 @@ graph TD
 
         UserAPI --> MongoDB["MongoDB<br>:27017"]
         UserAPI --> Redis["Redis<br>:6379"]
+        Chat -->|gRPC| Presence["Presence Service (Go/gRPC)<br>:50051"]
     end
 
     style Gateway fill:#2d6a4f,color:#fff
     style UserAPI fill:#1b4332,color:#fff
     style Chat fill:#1b4332,color:#fff
+    style Presence fill:#0d6efd,color:#fff
     style MongoDB fill:#6c757d,color:#fff
     style Redis fill:#6c757d,color:#fff
 ```
@@ -131,11 +133,13 @@ services/
   accounts/              # Ruby/Sinatra — user CRUD, session auth, bcrypt passwords
   gateway/               # OpenResty — reverse proxy, auth_request, rate limiting
   chat/                  # Node.js/Fastify — Socket.io real-time chat
+  presence/              # Go/gRPC — User presence tracking (online/typing)
 k8s/
   redis.yaml             # Redis deployment + ClusterIP service
   accounts.yaml          # Accounts deployment + ClusterIP service
   gateway.yaml           # Gateway deployment + NodePort service (30009)
   chat.yaml              # Chat deployment + ClusterIP service
+  presence.yaml          # Presence deployment + ClusterIP service
 tests/                   # pytest integration tests (register → login → access → logout)
 justfile                 # Orchestration (see below)
 ```

@@ -2,17 +2,13 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
+COPY services/chat/package*.json ./
 RUN npm ci --omit=dev
 
-# Copy application code
-COPY src/ ./src/
+COPY services/chat/src/ ./src/
+COPY proto/ ./proto/
 
-# Expose port
+ENV PROTO_DIR=/app/proto
+
 EXPOSE 3000
-
-# Start the application
 CMD ["node", "src/server.js"]

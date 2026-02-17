@@ -1,0 +1,30 @@
+syntax = "proto3";
+package presence;
+option go_package = "github.com/adrienschuler/godzilla/gen/presence";
+
+service PresenceService {
+  rpc UserConnected(UserRequest) returns (OnlineUsersResponse);
+  rpc UserDisconnected(UserRequest) returns (Empty);
+  rpc SetTyping(SetTypingRequest) returns (Empty);
+  rpc GetOnlineUsers(Empty) returns (OnlineUsersResponse);
+  rpc GetTypingUsers(Empty) returns (TypingUsersResponse);
+}
+
+message UserRequest {
+  string username = 1;
+}
+
+message SetTypingRequest {
+  string username = 1;
+  bool is_typing = 2;
+}
+
+message OnlineUsersResponse {
+  repeated string usernames = 1;
+}
+
+message TypingUsersResponse {
+  repeated string usernames = 1;
+}
+
+message Empty {}

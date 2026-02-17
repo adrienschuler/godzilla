@@ -1,59 +1,94 @@
-# Chat
+# Chat Service
 
-Real-time WebSocket chat server built with Fastify and Socket.io. Authenticated users can send and receive messages broadcast to all connected clients.
+Real-time WebSocket chat with presence tracking via gRPC.
 
-## How It Works
+## API
 
-1. Client connects via Socket.io at `/socket.io/` with a username (from `auth.username` or `X-Authenticated-User` header)
-2. Server emits a `welcome` event to the newly connected client
-3. Incoming `message` events (with a `{ text }` payload) are broadcast to all other connected users with sender info and timestamp
-4. Unauthenticated connections are rejected
+### WebSocket Endpoints
 
-## Endpoints
+**`/socket.io/`** - Authenticated WebSocket connection
 
-| Endpoint | Protocol | Description |
-|---|---|---|
-| `/socket.io/` | WebSocket | Real-time chat |
-| `/health` | HTTP GET | Returns `{ status: 'ok', service: 'chat' }` |
+- Requires: `X-Authenticated-User` header or `auth.username`
+- Rejects unauthenticated connections
 
-## Socket Events
+### HTTP Endpoints
 
-| Event | Direction | Payload |
-|---|---|---|
-| `welcome` | Server -> Client | `{ message, timestamp }` |
-| `message` | Client -> Server | `{ text }` |
-| `message` | Server -> Client | `{ from, data: { text }, timestamp }` |
+**`GET /health`** - Health check
 
-## Files
+```json
+{ "status": "ok", "service": "chat" }
+```
 
-- `src/server.js` — Fastify server with Socket.io integration, auth middleware, and message broadcasting
-- `src/session.js` — Parses session files to extract auth cookies and usernames from JWTs
-- `bin/chat-cli.js` — Interactive CLI chat client that authenticates via a saved session file
-- `test/session.test.js` — Tests for session parsing
-- `Dockerfile` — Builds on `node:20-alpine`, production dependencies only
+### Socket.io Events
+
+**Server → Client:**
+
+- `welcome`: `{ message: string, timestamp: string }` - Connection welcome message
+- `message`: `{ from: string, data: { text: string }, timestamp: string }` - Broadcast message
+- `presence`: `{ online: string[] }` - Online users list
+- `typing`: `{ users: string[] }` - Users currently typing
+
+**Client → Server:**
+
+- `message`: `{ text: string }` - Send chat message
+- `typing`: `{ isTyping: boolean }` - Typing indicator
+
+## Architecture
+
+```mermaid
+graph LR
+    Client -->|WebSocket| Chat[Chat Service]
+    Chat -->|gRPC| Presence[Presence Service]
+```
+
+**Components:**
+
+- `src/server.js` - Fastify + Socket.io server with auth
+- `src/presence-client.js` - gRPC client for presence service
+- `src/session.js` - Session parsing utilities
+- `bin/chat-cli.js` - CLI chat client
 
 ## Development
 
-```sh
-# Run tests
+```bash
+# Install dependencies
+npm ci
+
+# Run locally (port 3000)
+node src/server.js
+
+# Test
 npm test
 
-# Lint
+# Lint & format
 npm run lint
-
-# Format
 npm run format
 
-# Rebuild and deploy to Minikube
-just rebuild
+# Build Docker image
+just build
 ```
 
-## CLI Chat Client
+**Environment Variables:**
 
-Connect to the chat server from the terminal using a saved session file:
+- `PORT`: Server port (default: 3000)
+- `PRESENCE_HOST`: Presence service gRPC endpoint (default: localhost:50051)
+- `SERVER_URL`: CLI client target URL
 
-```sh
+## CLI Client
+
+Interactive terminal chat client using saved session files.
+
+```bash
+# Connect using session file
 npm run chat-cli -- <session-file>
+
+# Override server URL
+SERVER_URL=ws://example.com node bin/chat-cli.js session.json
 ```
 
-Set `SERVER_URL` to override the default endpoint (`http://127.0.0.1:8080`).
+**Features:**
+
+- Real-time message display with timestamps
+- Typing indicators from other users
+- Online user list updates
+- Session-based authentication

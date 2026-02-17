@@ -1,0 +1,15 @@
+source "https://rubygems.org"
+
+gem "sinatra"
+gem "sinatra-contrib"
+gem "puma"
+gem "mongo"
+gem "bigdecimal"
+gem "redis"
+gem "bcrypt"
+
+group :test do
+  gem "rack-test"
+  gem "mock_redis"
+  gem "minitest"
+end

@@ -1,0 +1,18 @@
+set working-directory := '../..'
+
+image := "gateway:latest"
+deployment := "gateway"
+
+test:
+    busted services/gateway/test/gateway_test.lua
+
+build:
+    eval $(minikube -p minikube docker-env) && \
+    docker build -t {{image}} services/gateway/
+
+deploy:
+    kubectl delete deployment {{deployment}} --ignore-not-found=true
+    kubectl apply -f k8s/gateway.yaml
+
+rebuild: test build deploy
+    kubectl rollout status deployment/{{deployment}} --timeout=60s

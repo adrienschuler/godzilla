@@ -1,0 +1,18 @@
+set working-directory := '../..'
+
+image := "chat:latest"
+deployment := "chat"
+
+test:
+    cd services/chat && npm test
+
+build:
+    eval $(minikube -p minikube docker-env) && \
+    docker build -t {{image}} services/chat/
+
+deploy:
+    kubectl delete deployment {{deployment}} --ignore-not-found=true
+    kubectl apply -f k8s/chat.yaml
+
+rebuild: test build deploy
+    kubectl rollout status deployment/{{deployment}} --timeout=60s

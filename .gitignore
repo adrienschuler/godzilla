@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+.venv/
+vendor/
+
+# Build output
+bin/
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test & coverage
+*.test
+*.out
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
+__pycache__/
+*.pyc
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment & secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Session/cookies (project-specific)
+session.cookie
+*.cookie
+cookies.txt
+
+# Logs
+*.log
+
+# Claude Code
+.claude/

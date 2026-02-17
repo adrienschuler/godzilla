@@ -6,6 +6,15 @@ deployment := "chat"
 test:
     cd services/chat && npm test
 
+lint:
+    cd services/chat && npm run lint
+
+format:
+    cd services/chat && npm run format
+
+check:
+    cd services/chat && npm run lint && npm run format -- --check
+
 build:
     eval $(minikube -p minikube docker-env) && \
     docker build -t {{image}} -f services/chat/Dockerfile .

@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: presence
+  namespace: godzilla
+  labels:
+    app: presence
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: presence
+  template:
+    metadata:
+      labels:
+        app: presence
+    spec:
+      containers:
+      - name: presence
+        image: presence:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 50051
+          name: grpc
+        livenessProbe:
+          grpc:
+            port: 50051
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          grpc:
+            port: 50051
+          initialDelaySeconds: 3
+          periodSeconds: 5
+        resources:
+          requests:
+            cpu: 50m
+            memory: 32Mi
+          limits:
+            cpu: 200m
+            memory: 64Mi
+        env:
+        - name: PORT
+          value: "50051"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: presence-svc
+  namespace: godzilla
+spec:
+  selector:
+    app: presence
+  ports:
+    - protocol: TCP
+      port: 50051
+      targetPort: 50051
+  type: ClusterIP

@@ -1,18 +1,18 @@
 set working-directory := '../..'
 
-image := "chat:latest"
-deployment := "chat"
+image := "presence:latest"
+deployment := "presence"
 
 test:
-    cd services/chat && npm test
+    cd services/presence && go test ./...
 
 build:
     eval $(minikube -p minikube docker-env) && \
-    docker build -t {{image}} -f services/chat/Dockerfile .
+    docker build -t {{image}} services/presence/
 
 deploy:
     kubectl delete deployment {{deployment}} --ignore-not-found=true
-    kubectl apply -f k8s/chat.yaml
+    kubectl apply -f k8s/presence.yaml
 
 rebuild: test build deploy
     kubectl rollout status deployment/{{deployment}} --timeout=60s

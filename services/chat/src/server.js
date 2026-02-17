@@ -1,5 +1,6 @@
 import fastify from 'fastify';
 import { Server as SocketIOServer } from 'socket.io';
+import { PresenceClient } from './presence-client.js';
 
 /**
  * @typedef {{ text: string }} MessageData
@@ -12,6 +13,7 @@ class Server {
     this.port = port;
     this.app = fastify({ logger: true });
     this.io = null;
+    this.presence = new PresenceClient();
 
     this.registerRoutes();
   }
@@ -44,7 +46,7 @@ class Server {
     this.io.on('connection', (socket) => this.onConnection(socket));
   }
 
-  onConnection(socket) {
+  async onConnection(socket) {
     this.app.log.info(`User ${socket.username} connected via WebSocket`);
 
     socket.emit('welcome', {
@@ -53,10 +55,34 @@ class Server {
       timestamp: new Date().toISOString(),
     });
 
+    try {
+      const { usernames } = await this.presence.userConnected(socket.username);
+      this.io.emit('presence', { online: usernames });
+    } catch (err) {
+      this.app.log.warn(`presence.userConnected failed: ${err.message}`);
+    }
+
     socket.on('message', (data) => this.onMessage(socket, data));
 
-    socket.on('disconnect', () => {
+    socket.on('typing', async (data) => {
+      try {
+        await this.presence.setTyping(socket.username, !!data?.isTyping);
+        const { usernames } = await this.presence.getTypingUsers();
+        socket.broadcast.emit('typing', { users: usernames });
+      } catch (err) {
+        this.app.log.warn(`presence.setTyping failed: ${err.message}`);
+      }
+    });
+
+    socket.on('disconnect', async () => {
       this.app.log.info(`User ${socket.username} disconnected`);
+      try {
+        await this.presence.userDisconnected(socket.username);
+        const { usernames } = await this.presence.getOnlineUsers();
+        this.io.emit('presence', { online: usernames });
+      } catch (err) {
+        this.app.log.warn(`presence.userDisconnected failed: ${err.message}`);
+      }
     });
   }
 

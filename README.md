@@ -1,6 +1,6 @@
 # Godzilla - A Microservice Playground on Kubernetes
 
-A deliberately over-engineered session-based API gateway on Kubernetes, built with OpenResty (Lua), Ruby, Node.js, MongoDB and Redis. This project exists primarily as a learning exercise to explore microservice patterns, container orchestration, and multi-language service integration. Built with AI assistance.
+A deliberately over-engineered session-based API gateway on Kubernetes, built with OpenResty (Lua), Ruby, Node.js, Go gRPC, MongoDB and Redis. This project exists primarily as a learning exercise to explore microservice patterns, container orchestration, and multi-language service integration. Built with AI assistance.
 
 ```ascii
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣤⡀⠀⠀⠀

@@ -16,7 +16,10 @@ deploy: build namespace deploy-services wait status
 port-forward:
     kubectl port-forward -n {{namespace}} svc/gateway-svc 8080:80 &
     kubectl port-forward -n {{namespace}} svc/presence-svc 50051:50051 &
+    kubectl port-forward -n {{namespace}} svc/redis-service 6379:6379 &
+    kubectl port-forward -n {{namespace}} svc/mongodb-service 27017:27017 &
     @echo "Forwarding gateway → localhost:8080, presence → localhost:50051"
+    @echo "Forwarding redis → localhost:6379, mongodb → localhost:27017"
     @wait
 
 # --- Build targets ---

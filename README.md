@@ -53,7 +53,11 @@ graph TD
     style Redis fill:#6c757d,color:#fff
 ```
 
-**Nginx/OpenResty** reverse-proxies all traffic and authenticates protected endpoints by checking sessions directly in Redis via Lua. **Ruby/Sinatra** handles user CRUD and session management, storing users in MongoDB and sessions in Redis. **Node.js/Fastify** serves real-time WebSocket chat via Socket.io.
+**Nginx/OpenResty** reverse-proxies all traffic and authenticates protected endpoints by checking sessions directly in Redis via Lua.
+
+**Ruby/Sinatra** handles user CRUD and session management, storing users in MongoDB and sessions in Redis.
+
+**Node.js/Fastify** serves real-time WebSocket chat via Socket.io.
 
 ## Auth Flow
 
@@ -99,7 +103,7 @@ All endpoints go through the Nginx gateway at `localhost:8080`.
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | POST | `/user/register` | No | Create a user (JSON `username` + `password`) |
-| POST | `/user/login` | No | Authenticate, receive session cookie (rate-limited: 5 req/min) |
+| POST | `/user/login` | No | Authenticate, receive session cookie (rate-limited: 10 req/s) |
 | POST | `/user/logout` | Session | Delete session, clear cookie |
 | WS | `/socket.io/` | Session | Real-time chat (Socket.io) |
 
@@ -108,19 +112,17 @@ All endpoints go through the Nginx gateway at `localhost:8080`.
 ```bash
 # Register + login
 http POST :8080/user/register username=alice password=secret123
-http --session=/tmp/s.json POST :8080/user/login username=alice password=secret123
+http --session=/tmp/alice.json POST :8080/user/login username=alice password=secret123
 
 # Logout
-http --session=/tmp/s.json POST :8080/user/logout
+http --session=/tmp/alice.json POST :8080/user/logout
 ```
 
 ### WebSocket Events
+[See](https://github.com/adrienschuler/godzilla/tree/main/services/chat#socket-events)
 
-| Direction | Event | Payload |
-|-----------|-------|---------|
-| Server → Client | `welcome` | `{ username, timestamp }` |
-| Client → Server | `message` | `{ text }` |
-| Server → Client | `message` | `{ text, from, timestamp }` (broadcast) |
+### CLI Client
+[See](https://github.com/adrienschuler/godzilla/tree/main/services/chat#cli-chat-client)
 
 ## Project Structure
 

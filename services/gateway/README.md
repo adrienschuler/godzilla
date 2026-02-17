@@ -8,7 +8,7 @@ The gateway sits in front of all backend services and provides:
 
 - **Route protection** — Protected routes (`/socket.io/`) validate sessions directly in Redis via Lua; the authenticated username is forwarded via `X-Authenticated-User` header
 - **Reverse proxying** — Routes requests to `accounts` and `chat` upstream services
-- **Rate limiting** — Login endpoint is rate-limited to 5 requests/minute per IP
+- **Rate limiting** — Login endpoint is rate-limited to 10 requests/seconds per IP
 - **JSON error responses** — All nginx-generated errors return structured JSON
 
 ## Routes

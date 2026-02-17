@@ -22,12 +22,14 @@ type store struct {
 	mu     sync.RWMutex
 	online map[string]int       // username -> connection count
 	typing map[string]time.Time // username -> last typing timestamp
+	cleanupDone chan struct{}
 }
 
 func newStore() *store {
 	s := &store{
 		online: make(map[string]int),
 		typing: make(map[string]time.Time),
+		cleanupDone: make(chan struct{}),
 	}
 	go s.cleanupTyping()
 	return s
@@ -35,36 +37,38 @@ func newStore() *store {
 
 func (s *store) connect(username string) []string {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.online[username]++
-	return s.onlineUsersLocked()
+	users := s.onlineUsersLocked()
+	s.mu.Unlock()
+	return users
 }
 
 func (s *store) disconnect(username string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.online[username] <= 1 {
+	if count, exists := s.online[username]; exists && count <= 1 {
 		delete(s.online, username)
 		delete(s.typing, username)
-	} else {
+	} else if exists {
 		s.online[username]--
 	}
 }
 
 func (s *store) setTyping(username string, isTyping bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if isTyping {
 		s.typing[username] = time.Now()
 	} else {
 		delete(s.typing, username)
 	}
+	s.mu.Unlock()
 }
 
 func (s *store) onlineUsers() []string {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.onlineUsersLocked()
+	users := s.onlineUsersLocked()
+	s.mu.RUnlock()
+	return users
 }
 
 func (s *store) onlineUsersLocked() []string {
@@ -78,27 +82,46 @@ func (s *store) onlineUsersLocked() []string {
 
 func (s *store) typingUsers() []string {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
 	users := make([]string, 0, len(s.typing))
 	for u := range s.typing {
 		users = append(users, u)
 	}
+	s.mu.RUnlock()
 	slices.Sort(users)
 	return users
 }
 
 func (s *store) cleanupTyping() {
 	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for range ticker.C {
-		s.mu.Lock()
-		for u, t := range s.typing {
-			if time.Since(t) > 5*time.Second {
-				delete(s.typing, u)
-			}
+	defer func() {
+		ticker.Stop()
+		close(s.cleanupDone)
+	}()
+
+	for {
+		select {
+		case <-ticker.C:
+			s.cleanupExpiredTyping()
+		case <-s.cleanupDone:
+			return
 		}
-		s.mu.Unlock()
 	}
+}
+
+func (s *store) cleanupExpiredTyping() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	now := time.Now()
+	for u, t := range s.typing {
+		if now.Sub(t) > 5*time.Second {
+			delete(s.typing, u)
+		}
+	}
+}
+
+func (s *store) stopCleanup() {
+	close(s.cleanupDone)
 }
 
 // server implements the PresenceService gRPC interface.
@@ -107,29 +130,38 @@ type server struct {
 	store *store
 }
 
-func (s *server) UserConnected(_ context.Context, req *pb.UserRequest) (*pb.OnlineUsersResponse, error) {
-	slog.Info("user connected", "username", req.Username)
+func (s *server) UserConnected(ctx context.Context, req *pb.UserRequest) (*pb.OnlineUsersResponse, error) {
 	users := s.store.connect(req.Username)
+	slog.InfoContext(ctx, "user connected", "username", req.Username, "online_count", len(users))
 	return &pb.OnlineUsersResponse{Usernames: users}, nil
 }
 
-func (s *server) UserDisconnected(_ context.Context, req *pb.UserRequest) (*pb.Empty, error) {
-	slog.Info("user disconnected", "username", req.Username)
+func (s *server) UserDisconnected(ctx context.Context, req *pb.UserRequest) (*pb.Empty, error) {
 	s.store.disconnect(req.Username)
+	slog.InfoContext(ctx, "user disconnected", "username", req.Username)
 	return &pb.Empty{}, nil
 }
 
-func (s *server) SetTyping(_ context.Context, req *pb.SetTypingRequest) (*pb.Empty, error) {
+func (s *server) SetTyping(ctx context.Context, req *pb.SetTypingRequest) (*pb.Empty, error) {
 	s.store.setTyping(req.Username, req.IsTyping)
+	action := "started"
+	if !req.IsTyping {
+		action = "stopped"
+	}
+	slog.InfoContext(ctx, "user typing", "username", req.Username, "action", action)
 	return &pb.Empty{}, nil
 }
 
-func (s *server) GetOnlineUsers(_ context.Context, _ *pb.Empty) (*pb.OnlineUsersResponse, error) {
-	return &pb.OnlineUsersResponse{Usernames: s.store.onlineUsers()}, nil
+func (s *server) GetOnlineUsers(ctx context.Context, _ *pb.Empty) (*pb.OnlineUsersResponse, error) {
+	users := s.store.onlineUsers()
+	slog.DebugContext(ctx, "get online users", "count", len(users))
+	return &pb.OnlineUsersResponse{Usernames: users}, nil
 }
 
-func (s *server) GetTypingUsers(_ context.Context, _ *pb.Empty) (*pb.TypingUsersResponse, error) {
-	return &pb.TypingUsersResponse{Usernames: s.store.typingUsers()}, nil
+func (s *server) GetTypingUsers(ctx context.Context, _ *pb.Empty) (*pb.TypingUsersResponse, error) {
+	users := s.store.typingUsers()
+	slog.DebugContext(ctx, "get typing users", "count", len(users))
+	return &pb.TypingUsersResponse{Usernames: users}, nil
 }
 
 func main() {
@@ -142,8 +174,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	store := newStore()
 	srv := grpc.NewServer()
-	pb.RegisterPresenceServiceServer(srv, &server{store: newStore()})
+	pb.RegisterPresenceServiceServer(srv, &server{store: store})
 
 	healthSrv := health.NewServer()
 	healthpb.RegisterHealthServer(srv, healthSrv)
@@ -161,6 +194,9 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-quit
 	slog.Info("shutting down", "signal", sig.String())
+	
+	// Clean up resources
+	store.stopCleanup()
 	srv.GracefulStop()
 	slog.Info("server stopped")
 }

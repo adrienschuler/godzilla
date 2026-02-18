@@ -125,6 +125,7 @@ http --session=/tmp/alice.json POST :8080/user/logout
 [See](https://github.com/adrienschuler/godzilla/tree/main/services/chat#socket-events)
 
 ### CLI Client
+![Chat TUI Screenshot](docs/chat-tui-screenshot.png)
 [See](https://github.com/adrienschuler/godzilla/tree/main/services/chat#cli-chat-client)
 
 ## Project Structure

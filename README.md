@@ -45,6 +45,7 @@ graph TD
         UserAPI --> MongoDB["MongoDB<br>:27017"]
         UserAPI --> Redis["Redis<br>:6379"]
         Chat -->|gRPC| Presence["Presence Service (Go/gRPC)<br>:50051"]
+        Chat -->|presence/typing events| Client
     end
 
     style Gateway fill:#2d6a4f,color:#fff

@@ -19,10 +19,10 @@ service PresenceService {
 
 ```bash
 # Run locally
-go run main.go
+go run ./cmd
 
 # Test
-go test ./...
+go test ./cmd
 
 # Build Docker image
 just build

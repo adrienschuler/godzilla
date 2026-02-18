@@ -4,7 +4,7 @@ image := "presence:latest"
 deployment := "presence"
 
 test:
-    cd services/presence && go test ./...
+    cd services/presence && go test ./cmd
 
 build:
     eval $(minikube -p minikube docker-env) && \

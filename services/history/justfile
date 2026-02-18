@@ -1,0 +1,21 @@
+set working-directory := '../..'
+
+image := "history:latest"
+deployment := "history"
+
+test:
+    cd services/history && uv run python -m pytest test/ -v
+
+build:
+    eval $(minikube -p minikube docker-env) && \
+    docker build -t {{image}} -f services/history/Dockerfile services/history
+
+deploy:
+    kubectl delete deployment {{deployment}} --ignore-not-found=true
+    kubectl apply -f k8s/history.yaml
+
+rebuild: test build deploy
+    kubectl rollout status deployment/{{deployment}} --timeout=60s
+
+logs *args:
+    kubectl logs -l app={{deployment}} {{args}}

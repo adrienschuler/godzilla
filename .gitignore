@@ -10,6 +10,8 @@ dist/
 *.dll
 *.so
 *.dylib
+# Go binaries (named after parent directory)
+services/presence/godzilla
 
 # Test & coverage
 *.test

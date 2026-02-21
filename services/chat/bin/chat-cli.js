@@ -24,7 +24,15 @@ class ChatCli {
     this.sessionCookie = cookie;
     this.username = username;
 
-    this.presence = new PresenceClient();
+    // Use HTTP proxy for presence when running remotely, direct gRPC when local
+    const presenceHost = process.env.PRESENCE_HOST;
+    if (presenceHost) {
+      this.presence = new PresenceClient({ host: presenceHost });
+    } else {
+      // When running against remote server, use HTTP proxy endpoints
+      this.presence = null;
+      this.presenceEndpoint = endpoint;
+    }
 
     this.socket = io(this.endpoint, {
       path: '/socket.io/',
@@ -84,16 +92,16 @@ class ChatCli {
   }
 
   updateTypingStatus(usernames) {
-    this.typingUsers = usernames;
     const others = usernames.filter((u) => u !== this.username);
-    const oldStatus = this.typingStatus;
     const newStatus = formatTypingText(others);
 
-    if (newStatus !== oldStatus) {
+    // Only update if the typing status actually changed
+    if (newStatus !== this.typingStatus) {
       // Must clear based on oldStatus before updating, since clearPromptArea
       // checks this.typingStatus to decide whether to move up a line.
       this.clearPromptArea();
       this.typingStatus = newStatus;
+      this.typingUsers = usernames;
       this.renderTypingStatus();
       this.rl.prompt(true);
     }
@@ -147,7 +155,75 @@ class ChatCli {
 
   async cleanup() {
     clearInterval(this.typingPoll);
-    await this.presence.userDisconnected(this.username).catch(() => {});
+    if (this.presence) {
+      await this.presence.userDisconnected(this.username).catch(() => {});
+    }
+  }
+
+  // HTTP proxy methods for presence
+  async getOnlineUsers() {
+    if (this.presence) {
+      const { usernames } = await this.presence.getOnlineUsers().catch(() => ({ usernames: [] }));
+      return usernames || [];
+    } else {
+      try {
+        const url = `${this.presenceEndpoint}/presence/online`;
+        const res = await fetch(url, {
+          headers: this.sessionCookie ? { Cookie: this.sessionCookie } : {},
+        });
+        if (!res.ok) return [];
+        const { online } = await res.json();
+        return online || [];
+      } catch {
+        return [];
+      }
+    }
+  }
+
+  async getTypingUsers() {
+    if (this.presence) {
+      const { usernames } = await this.presence.getTypingUsers().catch(() => ({ usernames: [] }));
+      return usernames || [];
+    } else {
+      try {
+        const url = `${this.presenceEndpoint}/presence/typing`;
+        const res = await fetch(url, {
+          headers: this.sessionCookie ? { Cookie: this.sessionCookie } : {},
+        });
+        if (!res.ok) return [];
+        const { typing } = await res.json();
+        return typing || [];
+      } catch {
+        return [];
+      }
+    }
+  }
+
+  async userConnected(username) {
+    if (this.presence) {
+      await this.presence.userConnected(username).catch(() => {});
+    }
+    // Note: When using HTTP proxy, userConnected is handled by the socket welcome event
+  }
+
+  async userDisconnected(username) {
+    if (this.presence) {
+      await this.presence.userDisconnected(username).catch(() => {});
+    }
+    // Note: When using HTTP proxy, userDisconnected is handled by socket disconnect
+  }
+
+  async setTyping(username, isTyping) {
+    if (this.presence) {
+      await this.presence.setTyping(username, isTyping).catch(() => {});
+    } else {
+      // When using HTTP proxy, send typing events via WebSocket
+      try {
+        this.socket.emit('typing', { isTyping });
+      } catch {
+        // Silently ignore typing errors
+      }
+    }
   }
 
   bindSocketEvents() {
@@ -173,8 +249,8 @@ class ChatCli {
       this.refreshPrompt();
       await this.loadHistory();
       try {
-        await this.presence.userConnected(this.username);
-        const { usernames } = await this.presence.getOnlineUsers();
+        await this.userConnected(this.username);
+        const usernames = await this.getOnlineUsers();
         if (usernames?.length) {
           this.onlineUsers = new Set(usernames);
         }
@@ -203,6 +279,12 @@ class ChatCli {
       this.removeTypingUser(data.from);
     });
 
+    this.socket.on('typing', (data) => {
+      if (data.users) {
+        this.updateTypingStatus(data.users);
+      }
+    });
+
     this.socket.on('disconnect', async (reason) => {
       await this.cleanup();
       this.printLine(null, 'Disconnected:', reason);
@@ -215,9 +297,11 @@ class ChatCli {
     readline.emitKeypressEvents(process.stdin);
     process.stdin.on('keypress', () => {
       const now = Date.now();
-      if (now - this.lastTypingSent > 1000) {
+      // Send typing events more frequently (every 500ms) to keep status alive
+      // This prevents the presence service from cleaning up while user is still typing
+      if (now - this.lastTypingSent > 500) {
         this.lastTypingSent = now;
-        this.presence.setTyping(this.username, true).catch(() => {});
+        this.setTyping(this.username, true).catch(() => {});
       }
     });
 
@@ -228,19 +312,28 @@ class ChatCli {
       this.printLine(null, pc.blue(this.username), text);
       this.socket.emit('message', { text });
       this.postMessage(text);
-      await this.presence.setTyping(this.username, false).catch(() => {});
+      await this.setTyping(this.username, false).catch(() => {});
     });
   }
 
   startTypingPoll() {
     this.typingPoll = setInterval(async () => {
       try {
-        const { usernames } = await this.presence.getTypingUsers();
-        this.updateTypingStatus(usernames || []);
-      } catch {
-        this.updateTypingStatus([]);
+        // Only poll if we currently have typing users shown
+        // This reduces unnecessary network requests
+        if (this.typingStatus) {
+          const usernames = await this.getTypingUsers();
+          // Update typing status (updateTypingStatus will handle the comparison)
+          this.updateTypingStatus(usernames || []);
+        }
+        // If no typing status is shown, no need to poll
+      } catch (err) {
+        // If there's an error and we have typing users shown, clear them
+        if (this.typingStatus) {
+          this.updateTypingStatus([]);
+        }
       }
-    }, 300);
+    }, 2000); // Further reduced frequency to 2000ms (2 seconds)
   }
 
   bindProcessEvents() {

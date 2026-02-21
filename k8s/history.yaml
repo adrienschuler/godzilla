@@ -18,7 +18,7 @@ spec:
       containers:
       - name: history
         image: history:latest
-        imagePullPolicy: Never
+        imagePullPolicy: Always
         ports:
         - containerPort: 8000
         env:

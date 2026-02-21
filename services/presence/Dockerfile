@@ -5,7 +5,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -o server ./cmd
 
-FROM alpine:3.20
+FROM scratch
 WORKDIR /app
 COPY --from=build /app/server .
 EXPOSE 50051

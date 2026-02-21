@@ -22,6 +22,27 @@ class Server {
     this.app.get('/health', async () => {
       return { status: 'ok', service: 'chat' };
     });
+
+    // Presence proxy endpoints
+    this.app.get('/presence/online', async () => {
+      try {
+        const { usernames } = await this.presence.getOnlineUsers();
+        return { online: usernames || [] };
+      } catch (err) {
+        this.app.log.warn(`presence proxy failed: ${err.message}`);
+        return { error: 'presence_service_unavailable' };
+      }
+    });
+
+    this.app.get('/presence/typing', async () => {
+      try {
+        const { usernames } = await this.presence.getTypingUsers();
+        return { typing: usernames || [] };
+      } catch (err) {
+        this.app.log.warn(`presence proxy failed: ${err.message}`);
+        return { error: 'presence_service_unavailable' };
+      }
+    });
   }
 
   setupSocketIO() {

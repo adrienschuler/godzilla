@@ -107,7 +107,8 @@ func (s *store) cleanupExpiredTyping() {
 
 	now := time.Now()
 	for u, t := range s.typing {
-		if now.Sub(t) > 5*time.Second {
+		// Increased timeout from 5s to 8s for more realistic typing behavior
+		if now.Sub(t) > 8*time.Second {
 			delete(s.typing, u)
 		}
 	}

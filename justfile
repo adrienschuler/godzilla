@@ -96,3 +96,30 @@ seed:
 
 clean:
     kubectl delete namespace {{namespace}} --ignore-not-found=true
+
+# --- GKE ---
+
+region := "europe-west1"
+registry := region + "-docker.pkg.dev"
+project_id := `grep 'project_id' terraform/terraform.tfvars | sed 's/.*= *"\(.*\)"/\1/'`
+repo := registry + "/" + project_id + "/godzilla"
+
+gke-setup:
+    cd terraform && terraform init && terraform apply
+    gcloud container clusters get-credentials godzilla --zone europe-west1-b --project {{project_id}}
+
+gke-auth:
+    gcloud auth configure-docker {{registry}}
+
+gke-push: gke-auth
+    docker buildx build --platform linux/amd64 --push -t {{repo}}/gateway:latest services/gateway/
+    docker buildx build --platform linux/amd64 --push -t {{repo}}/accounts:latest services/accounts/
+    docker buildx build --platform linux/amd64 --push -t {{repo}}/presence:latest services/presence/
+    docker buildx build --platform linux/amd64 --push -t {{repo}}/chat:latest -f services/chat/Dockerfile .
+    docker buildx build --platform linux/amd64 --push -t {{repo}}/history:latest services/history/
+
+gke-deploy: namespace
+    sed 's|image: \(.*\):latest|image: {{repo}}/\1:latest|' k8s/*.yaml | kubectl apply -f -
+
+gke-teardown:
+    cd terraform && terraform destroy

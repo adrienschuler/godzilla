@@ -18,7 +18,7 @@ spec:
       containers:
       - name: accounts
         image: accounts:latest
-        imagePullPolicy: Never # Use Never for local testing with Minikube
+        imagePullPolicy: Always
         env:
         - name: MONGO_URI
           value: "mongodb://mongodb:27017"

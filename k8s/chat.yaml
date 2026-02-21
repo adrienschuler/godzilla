@@ -18,7 +18,7 @@ spec:
       containers:
       - name: chat
         image: chat:latest
-        imagePullPolicy: Never # Use Never for local testing with Minikube
+        imagePullPolicy: Always
         ports:
         - containerPort: 3000
           name: http-chat

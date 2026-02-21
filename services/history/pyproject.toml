@@ -1,0 +1,13 @@
+[project]
+name = "history"
+version = "1.0.0"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115.0",
+    "motor>=3.6.0",
+    "pydantic>=2.10.0",
+    "pytest>=9.0.2",
+    "httpx>=0.28.0",
+    "mongomock-motor>=0.0.30",
+    "uvicorn>=0.34.0",
+]

@@ -2,7 +2,7 @@
 
 // Interactive Socket.io chat client. Authenticates via a saved session file
 // and provides a readline-based prompt for sending/receiving messages.
-// Usage: chat-cli.js <session-file>
+// Usage: chat-cli.js <session-file> [discussion-id]
 
 import io from 'socket.io-client';
 import readline from 'readline';
@@ -17,8 +17,9 @@ function formatTypingText(others) {
 }
 
 class ChatCli {
-  constructor(endpoint, sessionFile) {
+  constructor(endpoint, sessionFile, discussionId) {
     this.endpoint = endpoint;
+    this.discussionId = discussionId;
     const { cookie, username } = loadSession(sessionFile);
     this.sessionCookie = cookie;
     this.username = username;
@@ -104,6 +105,46 @@ class ChatCli {
     this.updateTypingStatus(this.typingUsers.filter((u) => u !== username));
   }
 
+  async loadHistory() {
+    if (!this.discussionId) return;
+    try {
+      const url = `${this.endpoint}/discussion/${this.discussionId}/messages?limit=10`;
+      const res = await fetch(url, {
+        headers: { Cookie: this.sessionCookie },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const { messages } = await res.json();
+      // Messages come newest-first, reverse to display chronologically
+      for (const msg of messages.reverse()) {
+        const isMe = msg.user_id === this.username;
+        const name = isMe ? pc.blue(msg.user_id) : pc.green(msg.user_id);
+        console.log(this.formatTime(msg.created_at), name, msg.text);
+      }
+      if (messages.length > 0) {
+        console.log(pc.dim('--- end of history ---'));
+      }
+    } catch (err) {
+      console.log(pc.dim(`Could not load history: ${err.message}`));
+    }
+  }
+
+  async postMessage(text) {
+    if (!this.discussionId) return;
+    try {
+      const url = `${this.endpoint}/discussion/${this.discussionId}/messages`;
+      await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: this.sessionCookie,
+        },
+        body: JSON.stringify([{ text }]),
+      });
+    } catch {
+      // Silently ignore history persistence errors to not disrupt chat
+    }
+  }
+
   async cleanup() {
     clearInterval(this.typingPoll);
     await this.presence.userDisconnected(this.username).catch(() => {});
@@ -130,7 +171,7 @@ class ChatCli {
     this.socket.on('welcome', async (data) => {
       if (data.username) this.username = data.username;
       this.refreshPrompt();
-      this.printLine(data.timestamp, data.message);
+      await this.loadHistory();
       try {
         await this.presence.userConnected(this.username);
         const { usernames } = await this.presence.getOnlineUsers();
@@ -186,6 +227,7 @@ class ChatCli {
       readline.moveCursor(process.stdout, 0, -1);
       this.printLine(null, pc.blue(this.username), text);
       this.socket.emit('message', { text });
+      this.postMessage(text);
       await this.presence.setTyping(this.username, false).catch(() => {});
     });
   }
@@ -213,15 +255,17 @@ class ChatCli {
 
 // CLI entry point
 if (!process.argv[2]) {
-  console.error('Usage: chat-cli.js <session-file>');
+  console.error('Usage: chat-cli.js <session-file> [discussion-id]');
   process.exit(1);
 }
 
 try {
   const sessionFile = process.argv[2];
+  const discussionId = process.argv[3] || process.env.DISCUSSION_ID;
   const endpoint = process.env.SERVER_URL || 'http://127.0.0.1:8080';
-  const client = new ChatCli(endpoint, sessionFile);
+  const client = new ChatCli(endpoint, sessionFile, discussionId);
   if (client.sessionCookie) console.log('Cookie:', client.sessionCookie);
+  if (discussionId) console.log('Discussion:', discussionId);
 } catch (err) {
   console.error(`Failed to start: ${err.message}`);
   process.exit(1);

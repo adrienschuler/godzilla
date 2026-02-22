@@ -9,3 +9,7 @@
 !services
 !services/chat
 !services/chat/**
+
+# Allow seed script
+!scripts
+!scripts/seed.py

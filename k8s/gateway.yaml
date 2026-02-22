@@ -54,6 +54,8 @@ kind: Service
 metadata:
   name: gateway-svc
   namespace: godzilla
+  annotations:
+    cloud.google.com/backend-config: '{"default": "gateway-backend-config"}'
 spec:
   selector:
     app: gateway
@@ -62,3 +64,13 @@ spec:
       port: 80
       targetPort: 80
   type: ClusterIP
+---
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: gateway-backend-config
+  namespace: godzilla
+spec:
+  timeoutSec: 86400
+  connectionDraining:
+    drainingTimeoutSec: 60

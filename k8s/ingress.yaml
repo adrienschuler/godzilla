@@ -16,6 +16,7 @@ metadata:
     networking.gke.io/managed-certificates: godzilla-cert
     kubernetes.io/ingress.global-static-ip-name: godzilla-ip
     kubernetes.io/ingress.class: "gce"
+    external-dns.alpha.kubernetes.io/hostname: godzilla.adri.ovh
 spec:
   rules:
     - host: godzilla.adri.ovh

@@ -54,5 +54,8 @@ cookies.txt
 *.tfstate.backup
 terraform.tfvars
 
+# Kubernetes secrets
+k8s/ovh-secret.yaml
+
 # Claude Code
 .claude/

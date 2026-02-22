@@ -51,7 +51,7 @@ cookies.txt
 # Terraform
 .terraform/
 *.tfstate
-*.tfstate.backup
+*.tfstate.*
 terraform.tfvars
 
 # Kubernetes secrets

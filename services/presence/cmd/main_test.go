@@ -127,7 +127,7 @@ func TestTypingExpiry(t *testing.T) {
 
 	// Manually backdate the typing timestamp
 	s.mu.Lock()
-	s.typing["alice"] = time.Now().Add(-6 * time.Second)
+	s.typing["alice"] = time.Now().Add(-9 * time.Second)
 	s.mu.Unlock()
 
 	// Wait for cleanup tick

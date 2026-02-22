@@ -18,7 +18,7 @@ spec:
       containers:
       - name: gateway
         image: gateway:latest
-        imagePullPolicy: Never  # Note: you can also use 'IfNotPresent'
+        imagePullPolicy: Always
         ports:
         - containerPort: 80
           name: http-port
@@ -54,6 +54,8 @@ kind: Service
 metadata:
   name: gateway-svc
   namespace: godzilla
+  annotations:
+    cloud.google.com/backend-config: '{"default": "gateway-backend-config"}'
 spec:
   selector:
     app: gateway
@@ -61,5 +63,14 @@ spec:
     - protocol: TCP
       port: 80
       targetPort: 80
-      nodePort: 30009
-  type: NodePort
+  type: ClusterIP
+---
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: gateway-backend-config
+  namespace: godzilla
+spec:
+  timeoutSec: 86400
+  connectionDraining:
+    drainingTimeoutSec: 60

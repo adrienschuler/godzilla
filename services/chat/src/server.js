@@ -22,12 +22,36 @@ class Server {
     this.app.get('/health', async () => {
       return { status: 'ok', service: 'chat' };
     });
+
+    // Presence proxy endpoints
+    this.app.get('/presence/online', async () => {
+      try {
+        const { usernames } = await this.presence.getOnlineUsers();
+        return { online: usernames || [] };
+      } catch (err) {
+        this.app.log.warn(`presence proxy failed: ${err.message}`);
+        return { error: 'presence_service_unavailable' };
+      }
+    });
+
+    this.app.get('/presence/typing', async () => {
+      try {
+        const { usernames } = await this.presence.getTypingUsers();
+        return { typing: usernames || [] };
+      } catch (err) {
+        this.app.log.warn(`presence proxy failed: ${err.message}`);
+        return { error: 'presence_service_unavailable' };
+      }
+    });
   }
 
   setupSocketIO() {
     this.io = new SocketIOServer(this.app.server, {
       cors: { origin: '*', methods: ['GET', 'POST'] },
       path: '/socket.io/',
+      transports: ['websocket'],
+      pingInterval: 10000,
+      pingTimeout: 5000,
     });
 
     this.io.use((socket, next) => {
@@ -78,8 +102,12 @@ class Server {
       this.app.log.info(`User ${socket.username} disconnected`);
       try {
         await this.presence.userDisconnected(socket.username);
-        const { usernames } = await this.presence.getOnlineUsers();
-        this.io.emit('presence', { online: usernames });
+        const [{ usernames: online }, { usernames: typing }] = await Promise.all([
+          this.presence.getOnlineUsers(),
+          this.presence.getTypingUsers(),
+        ]);
+        this.io.emit('presence', { online });
+        this.io.emit('typing', { users: typing || [] });
       } catch (err) {
         this.app.log.warn(`presence.userDisconnected failed: ${err.message}`);
       }

@@ -48,5 +48,14 @@ cookies.txt
 # Logs
 *.log
 
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+
+# Kubernetes secrets
+k8s/ovh-secret.yaml
+
 # Claude Code
 .claude/

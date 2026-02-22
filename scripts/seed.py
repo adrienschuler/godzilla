@@ -4,6 +4,7 @@
 # ///
 """Seed MongoDB with sample users, discussions, and messages."""
 
+import os
 import random
 
 import bcrypt
@@ -14,7 +15,7 @@ from pymongo import MongoClient
 
 fake = Faker()
 
-MONGO_URI = "mongodb://localhost:27017"
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
 
 client = MongoClient(MONGO_URI)
 
@@ -88,6 +89,9 @@ for conv in conversations:
             "created_at": last["created_at"],
         },
     })
+
+for doc in discussions_col.find():
+    print(f"  discussion_id={doc['_id']}  users={doc['users']}")
 
 print(f"Inserted {len(conversations)} discussions with {sum(len(c['messages']) for c in conversations)} messages")
 

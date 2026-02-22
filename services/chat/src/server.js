@@ -49,6 +49,9 @@ class Server {
     this.io = new SocketIOServer(this.app.server, {
       cors: { origin: '*', methods: ['GET', 'POST'] },
       path: '/socket.io/',
+      transports: ['websocket'],
+      pingInterval: 10000,
+      pingTimeout: 5000,
     });
 
     this.io.use((socket, next) => {
@@ -99,8 +102,12 @@ class Server {
       this.app.log.info(`User ${socket.username} disconnected`);
       try {
         await this.presence.userDisconnected(socket.username);
-        const { usernames } = await this.presence.getOnlineUsers();
-        this.io.emit('presence', { online: usernames });
+        const [{ usernames: online }, { usernames: typing }] = await Promise.all([
+          this.presence.getOnlineUsers(),
+          this.presence.getTypingUsers(),
+        ]);
+        this.io.emit('presence', { online });
+        this.io.emit('typing', { users: typing || [] });
       } catch (err) {
         this.app.log.warn(`presence.userDisconnected failed: ${err.message}`);
       }

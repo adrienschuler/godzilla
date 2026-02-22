@@ -8,7 +8,6 @@ import io from 'socket.io-client';
 import readline from 'readline';
 import pc from 'picocolors';
 import { loadSession } from '../src/session.js';
-import { PresenceClient } from '../src/presence-client.js';
 
 function formatTypingText(others) {
   if (others.length === 0) return '';
@@ -24,20 +23,10 @@ class ChatCli {
     this.sessionCookie = cookie;
     this.username = username;
 
-    // Use HTTP proxy for presence when running remotely, direct gRPC when local
-    const presenceHost = process.env.PRESENCE_HOST;
-    if (presenceHost) {
-      this.presence = new PresenceClient({ host: presenceHost });
-    } else {
-      // When running against remote server, use HTTP proxy endpoints
-      this.presence = null;
-      this.presenceEndpoint = endpoint;
-    }
-
     this.socket = io(this.endpoint, {
       path: '/socket.io/',
       extraHeaders: this.sessionCookie ? { Cookie: this.sessionCookie } : {},
-      transports: ['polling', 'websocket'],
+      transports: ['websocket'],
     });
 
     this.rl = readline.createInterface({
@@ -53,7 +42,6 @@ class ChatCli {
 
     this.bindSocketEvents();
     this.bindInputEvents();
-    this.startTypingPoll();
     this.bindProcessEvents();
   }
 
@@ -153,77 +141,8 @@ class ChatCli {
     }
   }
 
-  async cleanup() {
-    clearInterval(this.typingPoll);
-    if (this.presence) {
-      await this.presence.userDisconnected(this.username).catch(() => {});
-    }
-  }
-
-  // HTTP proxy methods for presence
-  async getOnlineUsers() {
-    if (this.presence) {
-      const { usernames } = await this.presence.getOnlineUsers().catch(() => ({ usernames: [] }));
-      return usernames || [];
-    } else {
-      try {
-        const url = `${this.presenceEndpoint}/presence/online`;
-        const res = await fetch(url, {
-          headers: this.sessionCookie ? { Cookie: this.sessionCookie } : {},
-        });
-        if (!res.ok) return [];
-        const { online } = await res.json();
-        return online || [];
-      } catch {
-        return [];
-      }
-    }
-  }
-
-  async getTypingUsers() {
-    if (this.presence) {
-      const { usernames } = await this.presence.getTypingUsers().catch(() => ({ usernames: [] }));
-      return usernames || [];
-    } else {
-      try {
-        const url = `${this.presenceEndpoint}/presence/typing`;
-        const res = await fetch(url, {
-          headers: this.sessionCookie ? { Cookie: this.sessionCookie } : {},
-        });
-        if (!res.ok) return [];
-        const { typing } = await res.json();
-        return typing || [];
-      } catch {
-        return [];
-      }
-    }
-  }
-
-  async userConnected(username) {
-    if (this.presence) {
-      await this.presence.userConnected(username).catch(() => {});
-    }
-    // Note: When using HTTP proxy, userConnected is handled by the socket welcome event
-  }
-
-  async userDisconnected(username) {
-    if (this.presence) {
-      await this.presence.userDisconnected(username).catch(() => {});
-    }
-    // Note: When using HTTP proxy, userDisconnected is handled by socket disconnect
-  }
-
-  async setTyping(username, isTyping) {
-    if (this.presence) {
-      await this.presence.setTyping(username, isTyping).catch(() => {});
-    } else {
-      // When using HTTP proxy, send typing events via WebSocket
-      try {
-        this.socket.emit('typing', { isTyping });
-      } catch {
-        // Silently ignore typing errors
-      }
-    }
+  setTyping(isTyping) {
+    this.socket.emit('typing', { isTyping });
   }
 
   bindSocketEvents() {
@@ -248,15 +167,6 @@ class ChatCli {
       if (data.username) this.username = data.username;
       this.refreshPrompt();
       await this.loadHistory();
-      try {
-        await this.userConnected(this.username);
-        const usernames = await this.getOnlineUsers();
-        if (usernames?.length) {
-          this.onlineUsers = new Set(usernames);
-        }
-      } catch {
-        this.printLine(null, pc.dim('Presence service unavailable'));
-      }
     });
 
     this.socket.on('presence', (data) => {
@@ -268,6 +178,7 @@ class ChatCli {
       }
       for (const user of this.onlineUsers) {
         if (!current.has(user) && user !== this.username) {
+          this.removeTypingUser(user);
           this.printLine(null, pc.yellow(`← ${user} left the chat`));
         }
       }
@@ -285,24 +196,24 @@ class ChatCli {
       }
     });
 
-    this.socket.on('disconnect', async (reason) => {
-      await this.cleanup();
+    this.socket.on('disconnect', (reason) => {
+      if (this.closing) return;
       this.printLine(null, 'Disconnected:', reason);
-      this.rl.close();
-      process.exit(0);
+      this.close();
     });
   }
 
   bindInputEvents() {
     readline.emitKeypressEvents(process.stdin);
-    process.stdin.on('keypress', () => {
+    process.stdin.on('keypress', (_ch, key) => {
+      if (key?.name === 'return' || key?.name === 'enter') return;
       const now = Date.now();
-      // Send typing events more frequently (every 500ms) to keep status alive
-      // This prevents the presence service from cleaning up while user is still typing
       if (now - this.lastTypingSent > 500) {
         this.lastTypingSent = now;
-        this.setTyping(this.username, true).catch(() => {});
+        this.setTyping(true);
       }
+      clearTimeout(this.typingTimeout);
+      this.typingTimeout = setTimeout(() => this.setTyping(false), 2000);
     });
 
     this.rl.on('line', async (line) => {
@@ -312,36 +223,23 @@ class ChatCli {
       this.printLine(null, pc.blue(this.username), text);
       this.socket.emit('message', { text });
       this.postMessage(text);
-      await this.setTyping(this.username, false).catch(() => {});
+      clearTimeout(this.typingTimeout);
+      this.setTyping(false);
     });
   }
 
-  startTypingPoll() {
-    this.typingPoll = setInterval(async () => {
-      try {
-        // Only poll if we currently have typing users shown
-        // This reduces unnecessary network requests
-        if (this.typingStatus) {
-          const usernames = await this.getTypingUsers();
-          // Update typing status (updateTypingStatus will handle the comparison)
-          this.updateTypingStatus(usernames || []);
-        }
-        // If no typing status is shown, no need to poll
-      } catch (err) {
-        // If there's an error and we have typing users shown, clear them
-        if (this.typingStatus) {
-          this.updateTypingStatus([]);
-        }
-      }
-    }, 2000); // Further reduced frequency to 2000ms (2 seconds)
+  close() {
+    if (this.closing) return;
+    this.closing = true;
+    this.rl.close();
+    this.socket.disconnect();
+    process.exit(0);
   }
 
   bindProcessEvents() {
-    process.on('SIGINT', async () => {
+    process.on('SIGINT', () => {
       console.log('\nDisconnecting...');
-      await this.cleanup();
-      this.socket.disconnect();
-      process.exit(0);
+      this.close();
     });
   }
 }

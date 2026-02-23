@@ -19,14 +19,26 @@ Real-time WebSocket chat with presence tracking via gRPC.
 { "status": "ok", "service": "chat" }
 ```
 
+**`GET /presence/online`** - Get online users
+
+```json
+{ "online": ["alice", "bob"] }
+```
+
+**`GET /presence/typing`** - Get typing users
+
+```json
+{ "typing": ["alice"] }
+```
+
 ### Socket.io Events
 
 **Server → Client:**
 
-- `welcome`: `{ message: string, timestamp: string }` - Connection welcome message
+- `welcome`: `{ message: string, username: string, timestamp: string }` - Connection welcome message with username
 - `message`: `{ from: string, data: { text: string }, timestamp: string }` - Broadcast message
-- `presence`: `{ online: string[] }` - Online users list
-- `typing`: `{ users: string[] }` - Users currently typing
+- `presence`: `{ online: string[] }` - Online users list (emitted on connect/disconnect)
+- `typing`: `{ users: string[] }` - Users currently typing (broadcast to others)
 
 **Client → Server:**
 

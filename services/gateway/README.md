@@ -6,8 +6,8 @@ OpenResty-based API gateway that handles route protection and reverse proxying t
 
 The gateway sits in front of all backend services and provides:
 
-- **Route protection** — Protected routes (`/socket.io/`) validate sessions directly in Redis via Lua; the authenticated username is forwarded via `X-Authenticated-User` header
-- **Reverse proxying** — Routes requests to `accounts` and `chat` upstream services
+- **Route protection** — Protected routes (`/socket.io/`, `/discussion*`) validate sessions directly in Redis via Lua; the authenticated username is forwarded via `X-Authenticated-User` header
+- **Reverse proxying** — Routes requests to `accounts`, `chat`, and `history` upstream services
 - **Rate limiting** — Login endpoint is rate-limited to 10 requests/seconds per IP
 - **JSON error responses** — All nginx-generated errors return structured JSON
 
@@ -19,11 +19,13 @@ The gateway sits in front of all backend services and provides:
 | `POST /user/logout` | No | accounts | Destroy session |
 | `/user/register` | No | accounts | Create new user |
 | `/socket.io/` | Yes | chat | WebSocket (Socket.io) |
+| `/discussion` | Yes | history | Chat history API (GET discussions, POST messages) |
+| `/discussion/` | Yes | history | Chat history API (GET messages with pagination) |
 | `/healthz` | No | Lua (inline) | Health check |
 
 ## Files
 
-- `nginx.conf` — Server config, upstream definitions, route declarations, and auth subrequest
+- `nginx.conf` — Server config, upstream definitions (`accounts-svc:8081`, `chat-svc:3000`, `history-svc:8000`), route declarations, and auth subrequest
 - `gateway.lua` — Lua utility module (Redis connection helpers, JSON response helpers)
 - `Dockerfile` — Builds on `openresty/openresty:alpine`, installs `lua-resty-session`
 
